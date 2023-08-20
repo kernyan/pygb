@@ -10,11 +10,14 @@ Python GB Emulator
 
 # Progress
 ```
-Given 8K VRAM, render OAM sprite and background tiles
+Given 8K VRAM, render all tiles, and render OAM
 ```
 
-![image](./output/oam_5000001.png)
-![image](./output/tile_background_5000001.png)
+Show all tiles
+![image](./src/output/tiles_5000001.png)
+
+Show OAM constructed tiles
+![image](./src/output/oam_5000001.png)
 
 # Reference
 - https://gekkio.fi/files/gb-docs/gbctr.pdf
