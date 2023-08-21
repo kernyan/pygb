@@ -3,10 +3,18 @@
 import json
 from typing import Dict, Any
 from enum import Enum
+from pprint import pprint as pp
+from pprint import pformat
 
 from pathlib import Path
 
 OPCODE_DATA = Path(__file__).resolve().parent / 'opcodes.json'
+
+class Flags(str, Enum):
+    Z = 'Z'    # zero
+    H = 'H'    # half carry
+    N = 'N'    # subtract
+    CY = 'CY'  # carry
 
 class Registers(str, Enum):
     A = 'A'
@@ -18,11 +26,44 @@ class Registers(str, Enum):
     H = 'H'
     L = 'L'
 
+# 34 Opcode Types
 class OTYPE(str, Enum):
     NOP = 'NOP'
     JP = 'JP'
     LD = 'LD'
     CP = 'CP'
+    JR = 'JR'
+
+    # unimplemented
+    ADC = 'ADC'
+    ADD = 'ADD'
+    AND = 'AND'
+    CALL = 'CALL'
+    CCF = 'CCF'
+    CPL = 'CPL'
+    DAA = 'DAA'
+    DEC = 'DEC'
+    DI = 'DI'
+    EI = 'EI'
+    HALT = 'HALT'
+    INC = 'INC'
+    OR = 'OR'
+    POP = 'POP'
+    PREF = 'PREFI'
+    PUSH = 'PUSH'
+    RET = 'RET'
+    RETI = 'RETI'
+    RLA = 'RLA'
+    RLCA = 'RLCA'
+    RRA = 'RRA'
+    RRCA = 'RRCA'
+    RST = 'RST'
+    SBC = 'SBC'
+    SCF = 'SCF'
+    STOP = 'STOP'
+    SUB = 'SUB'
+    XOR = 'XOR'
+
 
 def reg_or_imm(operand: str):
     try:
@@ -52,8 +93,25 @@ class Opcode:
             case OTYPE.CP:
                 self.o1 = reg_or_imm(json['operand1'])
                 return
+            case OTYPE.JR:
+                if 'operand2' in json:
+                    self.o1 = Flags(json['operand1'])
+                    assert json['operand2'] == 'r8', f'Unexpected operand2 of JR. Is {json["operand2"]} instead of r8'
+                    self.o2 = ROM[PC+1]
+                else:
+                    self.o1 = reg_or_imm(json['operand1'])
+                return
             case _:
                 raise RuntimeError(f'Unhandled decode {self.mne}')
+
+    def __repr__(self) -> str:
+        o = dict(mne=self.mne,
+                 length=self.length,
+                 nn=self.nn,
+                 o1=self.o1,
+                 o2=self.o2)
+        return pformat(o)
+
 
 class Decoder:
     def __init__(self, ROM):
@@ -64,13 +122,16 @@ class Decoder:
         self.ROM = ROM
 
     def summary(self):
+        mne = set()
         for k, v in self.reg_op.items():
             o = f"{k} {v['length']} {v['mnemonic']:8} {v['addr']} {v['group']:12}"
+            mne.add(v['mnemonic'])
             if 'operand1' in v:
                 o += f" {v['operand1']:4} "
             if 'operand2' in v:
                 o += f" {v['operand2']:4}"
             print(o)
+        pp(mne)
     
     def __call__(self, PC):
         opcode = self.ROM[PC]
