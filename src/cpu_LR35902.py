@@ -12,6 +12,10 @@ DEBUG = os.getenv("DEBUG", False)
 
 ROM_FILE = Path(__file__).resolve().parents[1] / 'blue.gb'
 
+BRANCH_OP = {
+    OTYPE.JR, OTYPE.JP
+}
+
 def hf_carry(a:int, b:int) -> bool:
     a = a & 0x0f
     b = b & 0x0f
@@ -30,12 +34,12 @@ class CPU:
         self.opcode = self.decoder(self.PC)
 
     def execute(self):
-        self.PC += self.opcode.length # will be overwritten by branch/jump
+        self.PC += 0 if self.opcode.mne in BRANCH_OP else self.opcode.length
         match self.opcode.mne:
             case OTYPE.NOP:
                 return
             case OTYPE.JP:
-                self.PC = self.opcode.nn
+                self.PC = self.opcode.n
                 return
             case OTYPE.LD:
                 self.regs[self.o1] = self.val(self.opcode.o2)
@@ -50,31 +54,35 @@ class CPU:
                 return
             case OTYPE.JR:
                 if isinstance(self.opcode.o1, Flags):
-                    self.PC += (self.opcode.o2 - self.opcode.length) if self.flags[self.opcode.o1] else 0
+                    self.PC += self.opcode.o2 if self.flags[self.opcode.o1] else self.opcode.length
                 else:
                     self.PC += self.val(self.opcode.o1)
+                return
+            case OTYPE.XOR:
+                self.regs[self.opcode.o1] ^= self.A
+                self.flags[Flags.Z] = self.regs[self.opcode.o1] == 0
                 return
             case _:
                 raise RuntimeError(f"Unhandled opcode {self.opcode.mne}")
 
     @property
     def A(self):
-        return self.regs[Registers.A.name]
+        return self.regs[Registers.A]
     @property
     def B(self):
-        return self.regs[Registers.B.name]
+        return self.regs[Registers.B]
     @property
     def C(self):
-        return self.regs[Registers.C.name]
+        return self.regs[Registers.C]
     @property
     def D(self):
-        return self.regs[Registers.D.name]
+        return self.regs[Registers.D]
     @property
     def E(self):
-        return self.regs[Registers.E.name]
+        return self.regs[Registers.E]
     @property
     def F(self):
-        return self.regs[Registers.F.name]
+        return self.regs[Registers.F]
 
     def val(self, reg_or_imm):
         if isinstance(reg_or_imm, Registers):

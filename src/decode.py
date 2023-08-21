@@ -33,6 +33,7 @@ class OTYPE(str, Enum):
     LD = 'LD'
     CP = 'CP'
     JR = 'JR'
+    XOR = 'XOR'
 
     # unimplemented
     ADC = 'ADC'
@@ -62,7 +63,6 @@ class OTYPE(str, Enum):
     SCF = 'SCF'
     STOP = 'STOP'
     SUB = 'SUB'
-    XOR = 'XOR'
 
 
 def reg_or_imm(operand: str):
@@ -76,7 +76,7 @@ class Opcode:
     def __init__(self, json: Dict[str, Any], ROM: bytes, PC):
         self.mne = OTYPE(json['mnemonic'])
         self.length = json['length']
-        self.nn = None
+        self.n = None
         self.o1 = None
         self.o2 = None
         print(self.mne)
@@ -84,22 +84,26 @@ class Opcode:
             case OTYPE.NOP:
                 return
             case OTYPE.JP:
-                self.nn = int.from_bytes(ROM[PC+1:PC+3], 'little')
+                self.n = int.from_bytes(ROM[PC+1:PC+3], 'little')
                 return
             case OTYPE.LD:
                 self.o1 = reg_or_imm(json['operand1'])
                 self.o2 = reg_or_imm(json['operand2'])
                 return
             case OTYPE.CP:
-                self.o1 = reg_or_imm(json['operand1'])
+                self.o1 = reg_or_imm(json['operand1']) # if imm should read next byte
                 return
             case OTYPE.JR:
+                breakpoint()
                 if 'operand2' in json:
                     self.o1 = Flags(json['operand1'])
                     assert json['operand2'] == 'r8', f'Unexpected operand2 of JR. Is {json["operand2"]} instead of r8'
                     self.o2 = ROM[PC+1]
                 else:
                     self.o1 = reg_or_imm(json['operand1'])
+                return
+            case OTYPE.XOR:
+                self.o1 = reg_or_imm(json['operand1'])
                 return
             case _:
                 raise RuntimeError(f'Unhandled decode {self.mne}')
