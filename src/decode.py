@@ -11,10 +11,10 @@ from pathlib import Path
 OPCODE_DATA = Path(__file__).resolve().parent / 'opcodes.json'
 
 class Flags(str, Enum):
-    Z = 'Z'    # zero
-    H = 'H'    # half carry
-    N = 'N'    # subtract
-    CY = 'CY'  # carry
+    Z = 'Z' # zero
+    N = 'N' # subtract
+    H = 'H' # half carry
+    C = 'C' # carry
 
 class Registers(str, Enum):
     A = 'A'
@@ -79,7 +79,7 @@ class Opcode:
         self.n = None
         self.o1 = None
         self.o2 = None
-        print(self.mne)
+        self.flags = json['flags']
         match self.mne:
             case OTYPE.NOP:
                 return
@@ -88,19 +88,22 @@ class Opcode:
                 return
             case OTYPE.LD:
                 self.o1 = reg_or_imm(json['operand1'])
-                self.o2 = reg_or_imm(json['operand2'])
+                match json['operand2']:
+                    case 'd8':
+                        self.o2 = ROM[PC+1]
+                    case _:
+                        raise RuntimeError(f'Unhandled load {json}')
                 return
             case OTYPE.CP:
                 self.o1 = reg_or_imm(json['operand1']) # if imm should read next byte
                 return
             case OTYPE.JR:
-                breakpoint()
                 if 'operand2' in json:
                     self.o1 = Flags(json['operand1'])
                     assert json['operand2'] == 'r8', f'Unexpected operand2 of JR. Is {json["operand2"]} instead of r8'
                     self.o2 = ROM[PC+1]
                 else:
-                    self.o1 = reg_or_imm(json['operand1'])
+                    self.o1 = ROM[PC+1]
                 return
             case OTYPE.XOR:
                 self.o1 = reg_or_imm(json['operand1'])
