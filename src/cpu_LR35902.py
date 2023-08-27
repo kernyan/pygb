@@ -6,6 +6,7 @@ from typing import Dict, List
 
 from utils import GBFile
 from decode import Decoder, OTYPE, Registers, Flags
+from array import array
 
 DEBUG = os.getenv("DEBUG", False)
 
@@ -23,6 +24,28 @@ def hf_carry(a:int, b:int) -> bool:
 def is_reg(operand) -> bool:
     return isinstance(operand, Registers)
 
+def rname(operand):
+    if isinstance(operand, Registers):
+        operand = operand.name
+    else:
+        operand = f"({hex(operand)})"
+    return operand
+
+class Memory:
+    def __init__(self):
+        self.mmap = array('B', [0]*(64*1024))
+        #     0 -  100     interrupt
+        #   100 -  150     ROM
+        #   150 - 8000     User rogram area
+        #  8000 - 9800     (VRAM) Bank 0, 1
+        #  9800 - 9C00     (VRAM) BG Display Data 1
+        #  9C00 - A000     (VRAM) BG Display Data 2
+        #  A000 - C000     External expansion working RAM
+        #  C000 - E000     Unit working RAM
+        #  FE00 - FEA0     OAM
+        #  FF00 - FF80     Port/Control/Sound
+        #  FF80 - FFFE     Stack
+
 class CPU:
     def __init__(self, rom: Dict[str, bytes], entry: bytes):
         self.rom = rom
@@ -31,6 +54,7 @@ class CPU:
         self.decoder = Decoder(self.rom)
         self.regs = {r.name: 0 for r in Registers}
         self.flags = {f.name: False for f in Flags}
+        self.mem = Memory()
     
     def fetch_and_decode(self):
         self.opcode = self.decoder(self.PC)
@@ -51,13 +75,13 @@ class CPU:
                 print('')
                 return
             case OTYPE.JP:
-                print(f' 0x{self.opcode.n:X}')
-                self.PC = self.opcode.n
+                print(f' 0x{self.opcode.o1:X}')
+                self.PC = self.opcode.o1
                 return
             case OTYPE.LD:
                 o2 = self.val(self.opcode.o2)
-                print(f' {self.opcode.o1.name} 0x{o2:X}')
-                self.regs[self.opcode.o1] = o2
+                print(f' {rname(self.opcode.o1)} 0x{o2:X}')
+                self.assign(self.opcode.o1, o2)
                 return
             case OTYPE.CP:
                 o1 = self.val(self.opcode.o1)
@@ -83,6 +107,13 @@ class CPU:
                 return
             case _:
                 raise RuntimeError(f"Unhandled opcode {self.opcode.mne}")
+
+    def assign(self, operand, value, len=1):
+        assert len==1, 'multi byte assign not yet implemented'
+        if isinstance(operand, Registers):
+            self.regs[operand] = value
+        else:
+            self.mem.mmap[operand] = value
 
     @property
     def A(self):

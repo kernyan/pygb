@@ -26,6 +26,10 @@ class Registers(str, Enum):
     H = 'H'
     L = 'L'
 
+class IMM(str, Enum):
+    d8 = 'd8' # 8 byte data
+    a16 = 'a16' # 16 byte absolute address
+
 # 34 Opcode Types
 class OTYPE(str, Enum):
     NOP = 'NOP'
@@ -64,14 +68,6 @@ class OTYPE(str, Enum):
     STOP = 'STOP'
     SUB = 'SUB'
 
-
-def reg_or_imm(operand: str):
-    try:
-        out = Registers(operand)
-    except:
-        out = int(operand, 16)
-    return out
-
 class Opcode:
     def __init__(self, json: Dict[str, Any], ROM: bytes, PC):
         self.mne = OTYPE(json['mnemonic'])
@@ -80,22 +76,21 @@ class Opcode:
         self.o1 = None
         self.o2 = None
         self.flags = json['flags']
+        self.ROM = ROM
+        self.PC = PC
+        self.JSON = json
         match self.mne:
             case OTYPE.NOP:
                 return
             case OTYPE.JP:
-                self.n = int.from_bytes(ROM[PC+1:PC+3], 'little')
+                self.o1 = self.reg_or_imm(json['operand1'])
                 return
             case OTYPE.LD:
-                self.o1 = reg_or_imm(json['operand1'])
-                match json['operand2']:
-                    case 'd8':
-                        self.o2 = ROM[PC+1]
-                    case _:
-                        raise RuntimeError(f'Unhandled load {json}')
+                self.o1 = self.reg_or_imm(json['operand1'])
+                self.o2 = self.reg_or_imm(json['operand2'])
                 return
             case OTYPE.CP:
-                self.o1 = reg_or_imm(json['operand1']) # if imm should read next byte
+                self.o1 = self.reg_or_imm(json['operand1']) # if imm should read next byte
                 return
             case OTYPE.JR:
                 if 'operand2' in json:
@@ -106,7 +101,7 @@ class Opcode:
                     self.o1 = ROM[PC+1]
                 return
             case OTYPE.XOR:
-                self.o1 = reg_or_imm(json['operand1'])
+                self.o1 = self.reg_or_imm(json['operand1'])
                 return
             case _:
                 raise RuntimeError(f'Unhandled decode {self.mne}')
@@ -118,6 +113,21 @@ class Opcode:
                  o1=self.o1,
                  o2=self.o2)
         return pformat(o)
+
+    def reg_or_imm(self, operand: str):
+        """
+        returns either register, or immediate/address
+        """
+        try:
+            out = Registers(operand)
+        except:
+            try:
+                dtype = IMM(operand)
+                byte_count = int(dtype[1:]) // 8
+                out = int.from_bytes(self.ROM[self.PC+1:self.PC+byte_count+1], 'little')
+            except:
+                out = int(operand, 16)
+        return out
 
 
 class Decoder:
