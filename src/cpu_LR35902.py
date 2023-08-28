@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 from typing import Dict, List
+from enum import Enum
 
 from utils import GBFile
 from decode import Decoder, OTYPE, Registers, Flags
@@ -13,7 +14,7 @@ DEBUG = os.getenv("DEBUG", False)
 ROM_FILE = Path(__file__).resolve().parents[1] / 'blue.gb'
 
 BRANCH_OP = {
-    OTYPE.JR, OTYPE.JP
+    OTYPE.JR, OTYPE.JP, OTYPE.CALL
 }
 
 def hf_carry(a:int, b:int) -> bool:
@@ -31,25 +32,30 @@ def rname(operand):
         operand = f"({hex(operand)})"
     return operand
 
+class MArea(Enum):
+    INT      =  0x0    #     0 -  100     
+    ROM      =  0x100  #   100 -  150     
+    PROG     =  0x150  #   150 - 8000     
+    VRAM_BK  =  0x8000 #  8000 - 9800     
+    VRAM_BG1 =  0x9800 #  9800 - 9C00     
+    VRAM_BG2 =  0x9C00 #  9C00 - A000     
+    EXT      =  0xA000 #  A000 - C000     
+    WORK     =  0xC000 #  C000 - E000     
+    OAM      =  0xFE00 #  FE00 - FEA0     
+    PORT     =  0xFF00 #  FF00 - FF80     
+    STACK    =  0xFF80 #  FF80 - FFFE          
+
+
 class Memory:
     def __init__(self):
         self.mmap = array('B', [0]*(64*1024))
-        #     0 -  100     interrupt
-        #   100 -  150     ROM
-        #   150 - 8000     User rogram area
-        #  8000 - 9800     (VRAM) Bank 0, 1
-        #  9800 - 9C00     (VRAM) BG Display Data 1
-        #  9C00 - A000     (VRAM) BG Display Data 2
-        #  A000 - C000     External expansion working RAM
-        #  C000 - E000     Unit working RAM
-        #  FE00 - FEA0     OAM
-        #  FF00 - FF80     Port/Control/Sound
-        #  FF80 - FFFE     Stack
+
 
 class CPU:
     def __init__(self, rom: Dict[str, bytes], entry: bytes):
         self.rom = rom
         self.PC = entry
+        self.SP = MArea.STACK.value
         self.opcode = None
         self.decoder = Decoder(self.rom)
         self.regs = {r.name: 0 for r in Registers}
@@ -65,6 +71,16 @@ class CPU:
                 self.flags[f] = True
             elif v == '0':
                 self.flags[f] = False
+    
+    def offset(self, operand, section: MArea):
+        if isinstance(operand, Registers):
+            v = operand
+            n = f'{operand.name}(0x{self.val(operand):X})'
+        else:
+            addr = section.value + self.val(operand)
+            v = self.mem.mmap[addr]
+            n = f'(0x{addr:X}(0x{v:X}))'
+        return v, n
 
     def execute(self):
         print(f'0x{self.PC:X} {self.opcode.mne.name} {self.opcode.length} {self.opcode.flags}', end='')
@@ -82,6 +98,20 @@ class CPU:
                 o2 = self.val(self.opcode.o2)
                 print(f' {rname(self.opcode.o1)} 0x{o2:X}')
                 self.assign(self.opcode.o1, o2)
+                return
+            case OTYPE.LDH:
+                v1, n1 = self.offset(self.opcode.o1, MArea.PORT)
+                v2, n2 = self.offset(self.opcode.o2, MArea.PORT)
+                print(f' {n1} {n2}')
+                """
+                tgt = self.val(self.opcode.o1) + MArea.PORT.value # add offset to high mem
+                o2 = self.val(self.opcode.o2)
+                if isinstance(self.opcode.o1, Registers):
+                    print(f' {rname(self.opcode.o1)} {rname(self.opcode.o2)}(0x{o2:X})')
+                else:
+                    print(f' {rname(tgt)} {rname(self.opcode.o2)}(0x{o2:X})')
+                """
+                self.assign(v1, self.val(v2))
                 return
             case OTYPE.CP:
                 o1 = self.val(self.opcode.o1)
@@ -105,15 +135,28 @@ class CPU:
                 self.regs[Registers.A] ^= self.regs[self.opcode.o1]
                 self.flags[Flags.Z] = self.regs[self.opcode.o1] == 0
                 return
+            case OTYPE.DI:
+                print()
+                return
+            case OTYPE.CALL:
+                print(f' 0x{self.opcode.o1:X}')
+                self.push(self.PC, len = 2)
+                self.PC = self.opcode.o1
+                return
             case _:
                 raise RuntimeError(f"Unhandled opcode {self.opcode.mne}")
 
     def assign(self, operand, value, len=1):
-        assert len==1, 'multi byte assign not yet implemented'
         if isinstance(operand, Registers):
             self.regs[operand] = value
         else:
-            self.mem.mmap[operand] = value
+            if len > 1:
+                self.mem.mmap[operand:operand+len] = array('B', value.to_bytes(2, 'little'))
+            else:
+                self.mem.mmap[operand] = value
+
+    def push(self, value, len=1):
+        self.assign(self.SP - len, value, len)
 
     @property
     def A(self):

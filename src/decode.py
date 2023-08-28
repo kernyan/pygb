@@ -15,6 +15,7 @@ class Flags(str, Enum):
     N = 'N' # subtract
     H = 'H' # half carry
     C = 'C' # carry
+    IME = 'IME' # interrupt
 
 class Registers(str, Enum):
     A = 'A'
@@ -29,6 +30,7 @@ class Registers(str, Enum):
 class IMM(str, Enum):
     d8 = 'd8' # 8 byte data
     a16 = 'a16' # 16 byte absolute address
+    a8 = 'a8' # 16 byte absolute address
 
 # 34 Opcode Types
 class OTYPE(str, Enum):
@@ -38,17 +40,18 @@ class OTYPE(str, Enum):
     CP = 'CP'
     JR = 'JR'
     XOR = 'XOR'
+    DI = 'DI' # disable interrupt
+    LDH = 'LDH' # load into high mem 0xFF(xx)
+    CALL = 'CALL'
 
     # unimplemented
     ADC = 'ADC'
     ADD = 'ADD'
     AND = 'AND'
-    CALL = 'CALL'
     CCF = 'CCF'
     CPL = 'CPL'
     DAA = 'DAA'
     DEC = 'DEC'
-    DI = 'DI'
     EI = 'EI'
     HALT = 'HALT'
     INC = 'INC'
@@ -78,7 +81,7 @@ class Opcode:
         self.flags = json['flags']
         self.ROM = ROM
         self.PC = PC
-        self.JSON = json
+        self.json = json
         match self.mne:
             case OTYPE.NOP:
                 return
@@ -103,7 +106,22 @@ class Opcode:
             case OTYPE.XOR:
                 self.o1 = self.reg_or_imm(json['operand1'])
                 return
+            case OTYPE.DI:
+                self.flags.append('0')
+                return 
+            case OTYPE.LDH:
+                self.o1 = self.reg_or_imm(json['operand1'])
+                self.o2 = self.reg_or_imm(json['operand2'])
+                return
+            case OTYPE.CALL:
+                self.o1 = self.reg_or_imm(json['operand1'])
+                if 'operand2' in json:
+                    self.o2 = self.reg_or_imm(json['operand2'])
+                    breakpoint()
+                return
             case _:
+                pp(self.json)
+                breakpoint()
                 raise RuntimeError(f'Unhandled decode {self.mne}')
 
     def __repr__(self) -> str:
