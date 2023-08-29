@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import Dict, List
 from enum import Enum
+import struct
 
 from utils import GBFile
 from decode import Decoder, OTYPE, Registers, Flags
@@ -103,14 +104,6 @@ class CPU:
                 v1, n1 = self.offset(self.opcode.o1, MArea.PORT)
                 v2, n2 = self.offset(self.opcode.o2, MArea.PORT)
                 print(f' {n1} {n2}')
-                """
-                tgt = self.val(self.opcode.o1) + MArea.PORT.value # add offset to high mem
-                o2 = self.val(self.opcode.o2)
-                if isinstance(self.opcode.o1, Registers):
-                    print(f' {rname(self.opcode.o1)} {rname(self.opcode.o2)}(0x{o2:X})')
-                else:
-                    print(f' {rname(tgt)} {rname(self.opcode.o2)}(0x{o2:X})')
-                """
                 self.assign(v1, self.val(v2))
                 return
             case OTYPE.CP:
@@ -125,10 +118,12 @@ class CPU:
             case OTYPE.JR:
                 if isinstance(self.opcode.o1, Flags):
                     print(f' Z 0x{self.opcode.o2:X}')
-                    self.PC += self.opcode.o2 if self.flags[self.opcode.o1] else self.opcode.length
+                    offset = self.signed(self.opcode.o2)
+                    self.PC += offset if self.check_flags(self.opcode.o1) else self.opcode.length
                 else:
                     print(f' 0x{self.opcode.o1:X}')
-                    self.PC += self.val(self.opcode.o1)
+                    offset = self.signed(self.val(self.opcode.o1))
+                    self.PC += offset
                 return
             case OTYPE.XOR:
                 print(f' {self.opcode.o1.name if is_reg(self.opcode.o1) else self.opcode.o1}')
@@ -143,8 +138,26 @@ class CPU:
                 self.push(self.PC, len = 2)
                 self.PC = self.opcode.o1
                 return
+            case OTYPE.RES:
+                print(f' {self.opcode.o1} {rname(self.opcode.o2)}(0x{self.val(self.opcode.o2):X})')
+                self.regs[self.opcode.o2] &= ~(1 << self.opcode.o1)
+                return
+            case OTYPE.AND:
+                print(f' A(0x{self.A:X}) 0x{self.val(self.opcode.o1):X}')
+                self.regs[Registers.A] &= self.val(self.opcode.o1)
+                self.flags[Flags.Z] = self.regs[Registers.A] == 0
+                return
             case _:
                 raise RuntimeError(f"Unhandled opcode {self.opcode.mne}")
+
+    def signed(self, val) -> int:
+        return struct.unpack('b', int.to_bytes(val))[0]
+
+    def check_flags(self, operand) -> bool:
+        if operand in [Flags.NC, Flags.NZ, Flags.NH]:
+            return self.flags[operand[-1]] == 0
+        else:
+            return self.flags[operand]
 
     def assign(self, operand, value, len=1):
         if isinstance(operand, Registers):

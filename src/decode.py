@@ -17,6 +17,11 @@ class Flags(str, Enum):
     C = 'C' # carry
     IME = 'IME' # interrupt
 
+    # hacky way to parse NZ, NH, NC
+    NZ = 'NZ' # not zero
+    NH = 'NH' # not half carry
+    NC = 'NC' # not carry
+
 class Registers(str, Enum):
     A = 'A'
     B = 'B'
@@ -43,11 +48,14 @@ class OTYPE(str, Enum):
     DI = 'DI' # disable interrupt
     LDH = 'LDH' # load into high mem 0xFF(xx)
     CALL = 'CALL'
+    AND = 'AND'
+
+    # extended
+    RES = 'RES' # reset
 
     # unimplemented
     ADC = 'ADC'
     ADD = 'ADD'
-    AND = 'AND'
     CCF = 'CCF'
     CPL = 'CPL'
     DAA = 'DAA'
@@ -119,6 +127,13 @@ class Opcode:
                     self.o2 = self.reg_or_imm(json['operand2'])
                     breakpoint()
                 return
+            case OTYPE.RES:
+                self.o1 = self.reg_or_imm(json['operand1'])
+                self.o2 = self.reg_or_imm(json['operand2'])
+                return
+            case OTYPE.AND:
+                self.o1 = self.reg_or_imm(json['operand1'])
+                return
             case _:
                 pp(self.json)
                 breakpoint()
@@ -171,8 +186,9 @@ class Decoder:
     def __call__(self, PC):
         opcode = self.ROM[PC]
         opcode = '0x' + f'{opcode:0>2X}'.lower()
-        if opcode == '0xCB':
-            raise RuntimeError('Extended CB unhandled')
+        if opcode == '0xcb':
+            opcode = '0x' + f'{self.ROM[PC+1]:0>2X}'.lower()
+            return Opcode(self.ext_op[opcode], self.ROM, PC + 1)
         else:
             return Opcode(self.reg_op[opcode], self.ROM, PC)
 
