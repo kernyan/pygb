@@ -49,6 +49,7 @@ class OTYPE(str, Enum):
     LDH = 'LDH' # load into high mem 0xFF(xx)
     CALL = 'CALL'
     AND = 'AND'
+    RET = 'RET'
 
     # extended
     RES = 'RES' # reset
@@ -67,7 +68,6 @@ class OTYPE(str, Enum):
     POP = 'POP'
     PREF = 'PREFI'
     PUSH = 'PUSH'
-    RET = 'RET'
     RETI = 'RETI'
     RLA = 'RLA'
     RLCA = 'RLCA'
@@ -133,6 +133,8 @@ class Opcode:
                 return
             case OTYPE.AND:
                 self.o1 = self.reg_or_imm(json['operand1'])
+                return
+            case OTYPE.RET:
                 return
             case _:
                 pp(self.json)

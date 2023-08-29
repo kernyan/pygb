@@ -15,7 +15,7 @@ DEBUG = os.getenv("DEBUG", False)
 ROM_FILE = Path(__file__).resolve().parents[1] / 'blue.gb'
 
 BRANCH_OP = {
-    OTYPE.JR, OTYPE.JP, OTYPE.CALL
+    OTYPE.JR, OTYPE.JP, OTYPE.CALL, OTYPE.RET
 }
 
 def hf_carry(a:int, b:int) -> bool:
@@ -135,7 +135,7 @@ class CPU:
                 return
             case OTYPE.CALL:
                 print(f' 0x{self.opcode.o1:X}')
-                self.push(self.PC, len = 2)
+                self.push(self.PC + self.opcode.length, len = 2)
                 self.PC = self.opcode.o1
                 return
             case OTYPE.RES:
@@ -146,6 +146,11 @@ class CPU:
                 print(f' A(0x{self.A:X}) 0x{self.val(self.opcode.o1):X}')
                 self.regs[Registers.A] &= self.val(self.opcode.o1)
                 self.flags[Flags.Z] = self.regs[Registers.A] == 0
+                return
+            case OTYPE.RET:
+                addr = self.pop(self.PC, len = 2)
+                print(f' 0x{addr:X}')
+                self.PC = addr
                 return
             case _:
                 raise RuntimeError(f"Unhandled opcode {self.opcode.mne}")
@@ -169,7 +174,13 @@ class CPU:
                 self.mem.mmap[operand] = value
 
     def push(self, value, len=1):
-        self.assign(self.SP - len, value, len)
+        self.SP -= len
+        self.assign(self.SP, value, len)
+
+    def pop(self, value, len=1):
+        v = int.from_bytes(self.mem.mmap[self.SP:self.SP+len], 'little')
+        self.SP += len
+        return v
 
     @property
     def A(self):
