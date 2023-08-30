@@ -7,7 +7,7 @@ from enum import Enum
 import struct
 
 from utils import GBFile
-from decode import Decoder, OTYPE, Registers, Flags
+from decode import Decoder, OTYPE, Registers, Flags, R16
 from array import array
 
 DEBUG = os.getenv("DEBUG", False)
@@ -56,10 +56,10 @@ class CPU:
     def __init__(self, rom: Dict[str, bytes], entry: bytes):
         self.rom = rom
         self.PC = entry
-        self.SP = MArea.STACK.value
         self.opcode = None
         self.decoder = Decoder(self.rom)
         self.regs = {r.name: 0 for r in Registers}
+        self.regs[Registers.SP] = 0xFFFE
         self.flags = {f.name: False for f in Flags}
         self.mem = Memory()
     
@@ -98,7 +98,8 @@ class CPU:
             case OTYPE.LD:
                 o2 = self.val(self.opcode.o2)
                 print(f' {rname(self.opcode.o1)} 0x{o2:X}')
-                self.assign(self.opcode.o1, o2)
+                len = 2 if self.opcode.o1 in R16 else 1
+                self.assign(self.opcode.o1, o2, len)
                 return
             case OTYPE.LDH:
                 v1, n1 = self.offset(self.opcode.o1, MArea.PORT)
@@ -165,7 +166,21 @@ class CPU:
             return self.flags[operand]
 
     def assign(self, operand, value, len=1):
-        if isinstance(operand, Registers):
+        if operand in R16 and len != 2:
+            raise RuntimeError(f"2 byte registers {operand} assigned with single byte {value}")
+        if operand == Registers.BC:
+            b = value.to_bytes(len, "little")
+            self.regs[Registers.C] = b[0]
+            self.regs[Registers.B] = b[1]
+        elif operand == Registers.HL:
+            b = value.to_bytes(len, "little")
+            self.regs[Registers.L] = b[0]
+            self.regs[Registers.H] = b[1]
+        elif operand == Registers.HLa:
+            breakpoint()
+            assert len == 1, f'Assigning to address must be single byte, but {len}'
+            self.mem.mmap[self.HL] = value
+        elif isinstance(operand, Registers):
             self.regs[operand] = value
         else:
             if len > 1:
@@ -174,12 +189,12 @@ class CPU:
                 self.mem.mmap[operand] = value
 
     def push(self, value, len=1):
-        self.SP -= len
+        self.regs[Registers.SP] -= len
         self.assign(self.SP, value, len)
 
     def pop(self, value, len=1):
         v = int.from_bytes(self.mem.mmap[self.SP:self.SP+len], 'little')
-        self.SP += len
+        self.regs[Registers.SP] += len
         return v
 
     @property
@@ -200,6 +215,12 @@ class CPU:
     @property
     def F(self):
         return self.regs[Registers.F]
+    @property
+    def SP(self):
+        return self.regs[Registers.SP]
+    @property
+    def HL(self):
+        return (self.regs[Registers.H] & 0xFF) << 8 | (self.regs[Registers.L] & 0xFF)
 
     def val(self, reg_or_imm):
         if is_reg(reg_or_imm):

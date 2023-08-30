@@ -32,10 +32,31 @@ class Registers(str, Enum):
     H = 'H'
     L = 'L'
 
-class IMM(str, Enum):
-    d8 = 'd8' # 8 byte data
-    a16 = 'a16' # 16 byte absolute address
-    a8 = 'a8' # 16 byte absolute address
+    BC = 'BC' # union of B and C
+    HL = 'HL' # union of H and L
+    SP = 'SP' # stack pointer
+
+    HLa = 'HLa' # *HL
+
+R16 = [Registers.BC, Registers.HL, Registers.SP]
+
+class IMM:
+    def __init__(self, operand: str):
+        # (d8)   8 byte data
+        # (d16) 16 byte data
+        # (a8)   8 byte absolute address
+        # (a16) 16 byte absolute address
+        #if operand[0] == '(' and operand[-1] == ')':
+        if operand[0] in ['a', 'd'] and int(operand[1:]) in [8, 16]:
+            self.dtype = operand[0]
+            self.size = int(operand[1:]) // 8
+            assert self.size in [1,2], f"imm must be either 1, or 2 bytes, but got {operand}"
+        elif operand[0] == '(' and operand[-1] == ')':
+            self.dtype = operand[1]
+            self.size = int(operand[2:-1]) // 8
+            assert self.size in [1,2], f"imm must be either 1, or 2 bytes, but got {operand}"
+        else:
+            raise RuntimeError(f"{operand} is not an imm")
 
 # 34 Opcode Types
 class OTYPE(str, Enum):
@@ -154,12 +175,13 @@ class Opcode:
         returns either register, or immediate/address
         """
         try:
+            if operand == "(HL)":
+                operand = "HLa"
             out = Registers(operand)
         except:
             try:
-                dtype = IMM(operand)
-                byte_count = int(dtype[1:]) // 8
-                out = int.from_bytes(self.ROM[self.PC+1:self.PC+byte_count+1], 'little')
+                imm = IMM(operand)
+                out = int.from_bytes(self.ROM[self.PC+1:self.PC+imm.size+1], 'little')
             except:
                 out = int(operand, 16)
         return out
