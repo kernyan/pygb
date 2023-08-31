@@ -97,7 +97,10 @@ class CPU:
                 return
             case OTYPE.LD:
                 o2 = self.val(self.opcode.o2)
-                print(f' {rname(self.opcode.o1)} 0x{o2:X}')
+                if isinstance(self.opcode.o2, Registers):
+                    print(f' {rname(self.opcode.o1)} {rname(self.opcode.o2)}(0x{o2:X})')
+                else:
+                    print(f' {rname(self.opcode.o1)} 0x{o2:X}')
                 len = 2 if self.opcode.o1 in R16 else 1
                 self.assign(self.opcode.o1, o2, len)
                 return
@@ -153,6 +156,28 @@ class CPU:
                 print(f' 0x{addr:X}')
                 self.PC = addr
                 return
+            case OTYPE.INC:
+                print(f' {rname(self.opcode.o1)}(0x{self.val(self.opcode.o1):X})')
+                if self.opcode.o1 in R16:
+                    self.assign(self.opcode.o1, self.val(self.opcode.o1) + 1, len=2)
+                else:
+                    raise RuntimeError(f"Need to update flags for INC {self.opcode.o1}")
+                return
+            case OTYPE.DEC:
+                print(f' {rname(self.opcode.o1)}(0x{self.val(self.opcode.o1):X})')
+                if self.opcode.o1 in R16:
+                    self.assign(self.opcode.o1, self.val(self.opcode.o1) - 1, len=2)
+                else:
+                    raise RuntimeError(f"Need to update flags for DEC {self.opcode.o1}")
+                return
+            case OTYPE.OR:
+                print(f" {rname(self.opcode.o1)}(0x{self.val(self.opcode.o1)})")
+                self.regs[Registers.A] |= self.val(self.opcode.o1)
+                return
+            case OTYPE.PUSH:
+                print(f' {rname(self.opcode.o1)}(0x{getattr(self,self.opcode.o1):X})')
+                self.push(getattr(self, self.opcode.o1), len = 2)
+                return
             case _:
                 raise RuntimeError(f"Unhandled opcode {self.opcode.mne}")
 
@@ -177,7 +202,6 @@ class CPU:
             self.regs[Registers.L] = b[0]
             self.regs[Registers.H] = b[1]
         elif operand == Registers.HLa:
-            breakpoint()
             assert len == 1, f'Assigning to address must be single byte, but {len}'
             self.mem.mmap[self.HL] = value
         elif isinstance(operand, Registers):
@@ -221,10 +245,16 @@ class CPU:
     @property
     def HL(self):
         return (self.regs[Registers.H] & 0xFF) << 8 | (self.regs[Registers.L] & 0xFF)
+    @property
+    def BC(self):
+        return (self.regs[Registers.B] & 0xFF) << 8 | (self.regs[Registers.C] & 0xFF)
+    @property
+    def DE(self):
+        return (self.regs[Registers.D] & 0xFF) << 8 | (self.regs[Registers.E] & 0xFF)
 
     def val(self, reg_or_imm):
         if is_reg(reg_or_imm):
-            return self.regs[reg_or_imm.name]
+            return getattr(self, reg_or_imm.name)
         return reg_or_imm
 
     def step(self):

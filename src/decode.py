@@ -33,10 +33,12 @@ class Registers(str, Enum):
     L = 'L'
 
     BC = 'BC' # union of B and C
+    DE = 'DE' # union of D and E
     HL = 'HL' # union of H and L
     SP = 'SP' # stack pointer
 
     HLa = 'HLa' # *HL
+
 
 R16 = [Registers.BC, Registers.HL, Registers.SP]
 
@@ -71,6 +73,10 @@ class OTYPE(str, Enum):
     CALL = 'CALL'
     AND = 'AND'
     RET = 'RET'
+    INC = 'INC'
+    DEC = 'DEC'
+    OR = 'OR'
+    PUSH = 'PUSH'
 
     # extended
     RES = 'RES' # reset
@@ -81,14 +87,10 @@ class OTYPE(str, Enum):
     CCF = 'CCF'
     CPL = 'CPL'
     DAA = 'DAA'
-    DEC = 'DEC'
     EI = 'EI'
     HALT = 'HALT'
-    INC = 'INC'
-    OR = 'OR'
     POP = 'POP'
     PREF = 'PREFI'
-    PUSH = 'PUSH'
     RETI = 'RETI'
     RLA = 'RLA'
     RLCA = 'RLCA'
@@ -156,6 +158,18 @@ class Opcode:
                 self.o1 = self.reg_or_imm(json['operand1'])
                 return
             case OTYPE.RET:
+                return
+            case OTYPE.INC:
+                self.o1 = self.reg_or_imm(json['operand1'])
+                return
+            case OTYPE.DEC:
+                self.o1 = self.reg_or_imm(json['operand1'])
+                return
+            case OTYPE.OR:
+                self.o1 = self.reg_or_imm(json['operand1'])
+                return
+            case OTYPE.PUSH:
+                self.o1 = self.reg_or_imm(json['operand1'])
                 return
             case _:
                 pp(self.json)
