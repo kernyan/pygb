@@ -7,7 +7,7 @@ from enum import Enum
 import struct
 
 from utils import GBFile
-from decode import Decoder, OTYPE, Registers, Flags, R16
+from decode import Decoder, OTYPE, Registers, Flags, FlagOp
 from array import array
 
 DEBUG = os.getenv("DEBUG", False)
@@ -53,10 +53,9 @@ class Memory:
 
 
 class CPU:
-    def __init__(self, rom: Dict[str, bytes], entry: bytes):
+    def __init__(self, rom: bytes, entry: int):
         self.rom = rom
         self.PC = entry
-        self.opcode = None
         self.decoder = Decoder(self.rom)
         self.regs = {r.name: 0 for r in Registers}
         self.regs[Registers.SP] = 0xFFFE
@@ -66,12 +65,9 @@ class CPU:
     def fetch_and_decode(self):
         self.opcode = self.decoder(self.PC)
 
-    def update_flags(self, flags_to_update: List[str]):
-        for f, v in zip(Flags, flags_to_update):
-            if v == '1':
-                self.flags[f] = True
-            elif v == '0':
-                self.flags[f] = False
+    def update_flags(self, flag_op: FlagOp):
+        for f, v in flag_op.flags_to_set.items():
+            self.flags[f] = v
     
     def offset(self, operand, section: MArea):
         if isinstance(operand, Registers):
